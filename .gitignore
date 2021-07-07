@@ -1,0 +1,4 @@
+__pycache__
+.beet_cache
+/poetry.lock
+/dist

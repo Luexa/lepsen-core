@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "lepsen-core"
+version = "0.1.0"
+packages = [{ include = "lepsen/core/*" }]
+description = "Minecraft data pack utility library."
+authors = ["Lue <lue@lued.me>"]
+readme = "README.md"
+license = "0BSD"
+homepage = "https://github.com/Luewd/lepsen-core"
+repository = "https://github.com/Luewd/lepsen-core"
+classifiers = [
+    "License :: OSI Approved",
+    "License :: Freely Distributable",
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+beet = "^0 >=0.33.0"
+lectern = "^0 >=0.15.1"
+
+[tool.poetry.dev-dependencies]
+black = { version = "^21.6b0", allow-prereleases = true }
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
