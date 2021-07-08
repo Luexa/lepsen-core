@@ -87,11 +87,10 @@ def lepsen(config: Optional[Dict[str, Any]]):
         for text in [lectern_sources[k].read_text() for k in features]:
             text = text.replace("__prefix__", prefix)
             document.add_markdown(text)
-        ctx.require(hangman("*"))
+        ctx.require(hangman(match=["*"]))
         ctx.require(render(data_pack={"functions": ["*"]}))
         if "forceload" in features:
             ctx.require(yellow_shulker_box)
-
 
     return plugin
 
