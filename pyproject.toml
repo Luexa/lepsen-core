@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lepsen-core"
-version = "0.1.1"
+version = "0.1.2"
 packages = [{ include = "lepsen/core/*" }]
 description = "Minecraft data pack utility library."
 authors = ["Lue <lue@lued.me>"]
@@ -15,7 +15,7 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.9"
-beet = "^0.35.1"
+beet = ">=0.35.1 <0.37.0"
 lectern = "^0.15.2"
 
 [tool.poetry.dev-dependencies]
