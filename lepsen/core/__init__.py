@@ -1,23 +1,22 @@
 __all__ = [
-    "lectern_sources",
     "beet_default",
+    "feature_set",
     "lepsen",
 ]
 
 
 from dataclasses import InitVar, dataclass, field
-from re import M
-from typing import Any, ClassVar, Dict, Iterable, Iterator, List, Optional, Set, Tuple
+from functools import partial
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Set, Tuple
 from importlib.abc import Traversable
 from importlib.resources import files
 
-from beet import Context
-from beet.library.data_pack import LootTable
+from beet import Context, Plugin
 from beet.toolchain.helpers import sandbox
 from beet.contrib.dundervar import beet_default as dundervar
 from beet.contrib.inline_function_tag import beet_default as inline_function_tag
 from beet.contrib.yellow_shulker_box import beet_default as yellow_shulker_box
-from beet.contrib.hangman import hangman
+from beet.contrib.lantern_load import base_data_pack as lantern_load
 from beet.contrib.render import render
 
 from lectern import Document
@@ -86,61 +85,95 @@ version_prefix = {
 # Dict mapping feature name to resource handle.
 lectern_sources = {k: v for k, v in _files(files(__name__))}
 
-features = {
-    "load": [],
-    "main": ["load"],
-    "tick_scheduler": ["main"],
-    "forceload": ["main"],
-    "player_head": [],
+
+def apply_document(ctx: Context, file: Traversable):
+    """Apply the contents of a Lectern document bundled with Lepsen Core."""
+
+    text = file.read_text()
+    for k in version_prefix:
+        text = text.replace(f"__{k}_prefix__", version_prefix[k])
+    document = ctx.inject(Document)
+    document.add_markdown(text)
+
+
+@dataclass(unsafe_hash=True)
+class Feature(Plugin):
+    """A feature to be applied as part of Lepsen Core."""
+
+    name: str
+    deps: List[str] = field(default_factory=list, hash=False, compare=False)
+    configurable: bool = field(kw_only=True, default=True, hash=False, compare=False)
+    action: InitVar[Optional[Plugin]] = field(kw_only=True, default=None)
+    _action: Plugin = field(init=False, repr=False)
+
+    def __post_init__(self, action: Optional[Plugin]):
+        if action is None:
+            if self.name not in lectern_sources:
+                raise KeyError(f"No file {self.name}.md found for feature {self.name}")
+            action = partial(apply_document, file=lectern_sources[self.name])
+        self._action = action
+
+    def __call__(self, ctx: Context):
+        self._action(ctx)
+
+
+feature_db = {
+    feature.name: feature
+    for feature in [
+        Feature("load", action=lantern_load),
+        Feature("yellow_shulker_box", action=yellow_shulker_box, configurable=False),
+        Feature("main", ["load"]),
+        Feature("tick_scheduler", ["main"]),
+        Feature("forceload", ["main", "yellow_shulker_box"]),
+        Feature("player_head"),
+    ]
 }
 
 
-def add_feature(set: Set[str], feature: str):
-    if feature not in set:
-        set.add(feature)
-        for feature_dep in features[feature]:
-            add_feature(set, feature_dep)
+def add_feature(set: Set[str], list: List[Feature], feature: Feature):
+    if feature.name not in set:
+        set.add(feature.name)
+        for feature_dep in feature.deps:
+            add_feature(set, list, feature_db[feature_dep])
+        list.append(feature)
 
 
-def feature_set(config: Optional[Dict[str, Any]]) -> Set[str]:
+def feature_set(features: Iterable[str]) -> List[Feature]:
     feature_set = set()
-    for feature in features:
-        if config and config.get(feature):
-            add_feature(feature_set, feature)
-    return feature_set
+    feature_list = list()
+    for feature_name in features:
+        if (feature := feature_db.get(feature_name)) and feature.configurable:
+            add_feature(feature_set, feature_list, feature)
+    return feature_list
 
 
-def lepsen(config: Optional[Dict[str, Any]]):
-    """Return a plugin that will add the Lepsen Core library to the current pack."""
+def config_to_iter(config: Dict[str, Any]) -> Iterator[str]:
+    for k in config:
+        if k in feature_db and config[k]:
+            yield k
 
-    # Read Lepsen feature config.
-    features = feature_set(config)
 
-    def plugin(ctx: Context):
-        # Load and render the requested documents.
-        ctx.require(dundervar)
-        ctx.require(inline_function_tag)
-        for k in version:
-            for t in version[k]:
-                ctx.template.env.globals[f"{k}_ver_{t}"] = version[k][t]
-        for k in version_check:
-            ctx.template.env.globals[f"{k}_version_check"] = version_check[k]
-        document = ctx.inject(Document)
-        document.loaders.append(handle_yaml)
-        for k in features:
-            text = lectern_sources[k].read_text()
-            for k in version_prefix:
-                text = text.replace(f"__{k}_prefix__", version_prefix[k])
-            document.add_markdown(text)
-        ctx.require(render(data_pack={"functions": ["*"]}))
-        mecha = ctx.inject(Mecha)
-        mecha.compile(ctx.data, multiline=True)
-        if "forceload" in features:
-            ctx.require(yellow_shulker_box)
+def lepsen(ctx: Context, features: List[Feature]):
+    """Add the Lepsen core library to the current pack."""
 
-    return plugin
+    ctx.require(dundervar)
+    ctx.require(inline_function_tag)
+    for k in version:
+        for t in version[k]:
+            ctx.template.env.globals[f"{k}_ver_{t}"] = version[k][t]
+    for k in version_check:
+        ctx.template.env.globals[f"{k}_version_check"] = version_check[k]
+    document = ctx.inject(Document)
+    document.loaders.append(handle_yaml)
+    ctx.require(*features)
+    ctx.require(render(data_pack={"functions": ["*"]}))
+    mecha = ctx.inject(Mecha)
+    mecha.compile(ctx.data, multiline=True)
 
 
 def beet_default(ctx: Context):
-    plugin = lepsen(ctx.meta.get("lepsen", {}))
+    """Load plugin using config from the `ctx.meta` field."""
+
+    config = config_to_iter(ctx.meta.get("lepsen", {}))
+    plugin = partial(lepsen, features=feature_set(config))
     ctx.require(sandbox(plugin))

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lepsen-core"
-version = "0.2.0.rc1"
+version = "0.2.0rc2"
 packages = [{ include = "lepsen/core/*" }]
 description = "Minecraft data pack utility library."
 authors = ["Lue <lue@lued.me>"]
