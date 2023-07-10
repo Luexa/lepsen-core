@@ -15,9 +15,9 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.10"
-beet = "^0.84.0"
-lectern = "^0.26.0"
-mecha = "^0.67.0"
+beet = ">=0.84.0"
+lectern = ">=0.26.0"
+mecha = ">=0.67.0"
 nbtlib = "^1.12.1"
 pydantic = "^1.9.0"
 
